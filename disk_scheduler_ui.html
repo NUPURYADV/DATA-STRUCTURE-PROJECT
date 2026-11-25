@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Disk Scheduling Simulator</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f7f9;--card:#fff;--text:#1d2330;--muted:#667085;--line:#e3e6ec;--accent:#2f6fed;--best:#e7f6ec;--err:#b42318;--bar:#2f6fed}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12151b;--card:#1b2029;--text:#e8ebf1;--muted:#98a2b3;--line:#2c3340;--accent:#6d9bff;--best:#17301f;--err:#f97066;--bar:#6d9bff}}
+:root[data-theme="dark"]{--bg:#12151b;--card:#1b2029;--text:#e8ebf1;--muted:#98a2b3;--line:#2c3340;--accent:#6d9bff;--best:#17301f;--err:#f97066;--bar:#6d9bff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+textarea{min-height:64px;resize:vertical}
+button{padding:9px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:12px}
+.row>div{flex:1 1 130px}
+.err{color:var(--err);margin-top:10px;min-height:1em}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.ord{white-space:normal;color:var(--muted);font-size:13px;min-width:220px}
+tr.best td{background:var(--best)}
+.bar{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:14px}
+.bar b{width:64px;font-weight:600}.bar i{display:block;height:18px;background:var(--bar);border-radius:4px;min-width:2px}
+.bar span{color:var(--muted)}
+.paths{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.paths svg{width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.paths h3{font-size:14px;margin:0 0 4px}
+.note{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<main>
+<h1>Disk Scheduling Simulator</h1>
+<p class="sub">FCFS, SSTF, SCAN, C-SCAN and LOOK on the same input. Our own linked list and merge sort, same conventions as the C++ project.</p>
+
+<div class="card">
+  <h2>Input</h2>
+  <div class="grid">
+    <div><label for="disk">Disk size (tracks 0 to size-1)</label><input id="disk" type="number" value="200"></div>
+    <div><label for="head">Initial head</label><input id="head" type="number" value="53"></div>
+    <div><label for="dir">Direction</label><select id="dir"><option>right</option><option>left</option></select></div>
+  </div>
+  <div class="row"><div style="flex-basis:100%"><label for="reqs">Requests (separated by spaces or commas)</label>
+    <textarea id="reqs">98 183 37 122 14 124 65 67</textarea></div></div>
+  <div class="row">
+    <div><label for="wl">Workload type</label><select id="wl"><option>random</option><option>clustered</option><option>sequential</option><option>skewed</option></select></div>
+    <div><label for="cnt">Count</label><input id="cnt" type="number" value="20"></div>
+    <div><label for="seed">Seed</label><input id="seed" type="number" value="1"></div>
+    <div><button class="sec" id="gen" type="button">Generate requests</button></div>
+    <div><button id="run" type="button">Run all five</button></div>
+  </div>
+  <div class="err" id="err"></div>
+</div>
+
+<div class="card"><h2>Comparison (sorted by total movement)</h2>
+  <div class="scroll"><table><thead><tr><th>Algorithm</th><th>Total movement</th><th>Avg seek</th><th>Service order (* = virtual stop)</th></tr></thead><tbody id="tb"></tbody></table></div>
+  <p class="note">Average seek = total movement / number of real requests. The C-SCAN return jump is counted.</p>
+</div>
+
+<div class="card"><h2>Total head movement</h2><div id="bars"></div></div>
+<div class="card"><h2>Head path (step on the x axis, track on the y axis)</h2><div class="paths" id="paths"></div></div>
+</main>
+
+<script>
+// ---------- own data structures ----------
+class LinkedList {
+  constructor(){ this.head=null; this.tail=null; this.size=0; }
+  append(v){ const n={value:v,next:null}; if(!this.head){this.head=this.tail=n;} else {this.tail.next=n; this.tail=n;} this.size++; }
+  removeNode(prev,node){ if(prev===null) this.head=node.next; else prev.next=node.next; if(this.tail===node) this.tail=prev; this.size--; }
+  toArray(){ const a=[]; for(let p=this.head;p;p=p.next) a.push(p.value); return a; }
+}
+function mergeSort(a){
+  if(a.length<=1) return a.slice();
+  const m=a.length>>1, l=mergeSort(a.slice(0,m)), r=mergeSort(a.slice(m)), out=[];
+  let i=0,j=0;
+  while(i<l.length&&j<r.length){ if(l[i]<=r[j]) out.push(l[i++]); else out.push(r[j++]); }
+  while(i<l.length) out.push(l[i++]);
+  while(j<r.length) out.push(r[j++]);
+  return out;
+}
+function validate(disk,head,reqs,dir){
+  if(!Number.isInteger(disk)||disk<=0) throw new Error("Disk size must be a positive integer.");
+  if(dir!=="left"&&dir!=="right") throw new Error("Direction must be left or right.");
+  if(!Number.isInteger(head)||head<0||head>disk-1) throw new Error("Head must be an integer inside the disk (0 to "+(disk-1)+").");
+  if(reqs.length===0) throw new Error("The request list is empty.");
+  for(const r of reqs){
+    if(!Number.isInteger(r)) throw new Error("Request "+r+" is not an integer.");
+    if(r<0) throw new Error("Request "+r+" is negative.");
+    if(r>disk-1) throw new Error("Request "+r+" is outside the disk.");
+  }
+}
+function totalMovement(order,head){ let t=0,c=head; for(const v of order){ t+=Math.abs(v-c); c=v; } return t; }
+
+// ---------- algorithms: each returns {order, virt} ----------
+function split(sorted,head,dir){
+  const lower=[],upper=[];
+  for(const v of sorted){ const isLow = dir==="right" ? v<head : v<=head; (isLow?lower:upper).push(v); }
+  return {lower,upper};
+}
+function fcfs(req){ const l=new LinkedList(); req.forEach(v=>l.append(v)); return {order:l.toArray(),virt:[]}; }
+function sstf(req,head){
+  const pend=new LinkedList(), out=new LinkedList(); req.forEach(v=>pend.append(v));
+  let cur=head;
+  while(pend.size>0){
+    let best=null,bestPrev=null,bd=0,prev=null;
+    for(let p=pend.head;p;prev=p,p=p.next){
+      const d=Math.abs(p.value-cur);
+      if(best===null||d<bd||(d===bd&&p.value<best.value)){best=p;bestPrev=prev;bd=d;}
+    }
+    out.append(best.value); cur=best.value; pend.removeNode(bestPrev,best);
+  }
+  return {order:out.toArray(),virt:[]};
+}
+function sweep(req,head,disk,dir,kind){
+  const {lower,upper}=split(mergeSort(req),head,dir), end=disk-1, order=[], virt=[];
+  const asc=a=>a.forEach(v=>order.push(v)), desc=a=>{for(let i=a.length-1;i>=0;i--) order.push(a[i]);};
+  const stop=t=>{order.push(t);virt.push(t);};
+  if(dir==="right"){
+    asc(upper); const pos=upper.length?upper[upper.length-1]:head;
+    if(kind==="scan"){ if(pos!==end) stop(end); desc(lower); }
+    else if(kind==="cscan"){ if(pos!==end) stop(end); if(lower.length){ if(lower[0]!==0) stop(0); asc(lower);} }
+    else desc(lower);
+  } else {
+    desc(lower); const pos=lower.length?lower[0]:head;
+    if(kind==="scan"){ if(pos!==0) stop(0); asc(upper); }
+    else if(kind==="cscan"){ if(pos!==0) stop(0); if(upper.length){ if(upper[upper.length-1]!==end) stop(end); desc(upper);} }
+    else asc(upper);
+  }
+  return {order,virt};
+}
+const ALGOS=[
+  {name:"FCFS",fn:(r,h)=>fcfs(r)},
+  {name:"SSTF",fn:(r,h)=>sstf(r,h)},
+  {name:"SCAN",fn:(r,h,d,dr)=>sweep(r,h,d,dr,"scan")},
+  {name:"C-SCAN",fn:(r,h,d,dr)=>sweep(r,h,d,dr,"cscan")},
+  {name:"LOOK",fn:(r,h,d,dr)=>sweep(r,h,d,dr,"look")}
+];
+
+// ---------- workload generator (xorshift64*, same as the C++ version) ----------
+function makeRng(seed){
+  let s=BigInt.asUintN(64,BigInt(seed)*2654435761n+88172645463325252n);
+  const next=()=>{ s^=s>>12n; s^=BigInt.asUintN(64,s<<25n); s^=s>>27n; return BigInt.asUintN(64,s*2685821657736338717n); };
+  return (lo,hi)=>lo+Number(next()%BigInt(hi-lo+1));
+}
+function generate(type,n,disk,seed){
+  const rg=makeRng(seed), out=[], cl=(v)=>Math.min(Math.max(v,0),disk-1);
+  if(type==="random") for(let i=0;i<n;i++) out.push(rg(0,disk-1));
+  else if(type==="clustered"){ const c=rg(0,disk-1), sp=Math.max(1,Math.floor(disk/20)); for(let i=0;i<n;i++) out.push(cl(c+rg(-sp,sp))); }
+  else if(type==="sequential"){ let c=rg(0,disk-1); for(let i=0;i<n;i++){ out.push(c); c=(c+rg(1,5))%disk; } }
+  else { const hot=Math.max(1,Math.floor(disk/5)); for(let i=0;i<n;i++) out.push(hot>=disk||rg(0,99)<80?rg(0,hot-1):rg(hot,disk-1)); }
+  return out;
+}
+
+// ---------- UI ----------
+const $=id=>document.getElementById(id);
+function parseReqs(text){
+  const toks=text.split(/[\s,]+/).filter(Boolean);
+  return toks.map(t=>{ if(!/^[+-]?\d+$/.test(t)) throw new Error("'"+t+"' is not an integer."); return parseInt(t,10); });
+}
+function pathSvg(order,head,disk){
+  const W=300,H=150,P=8, pts=[head].concat(order), m=Math.max(1,pts.length-1);
+  const xy=pts.map((t,i)=>[P+(i/m)*(W-2*P), P+(1-t/Math.max(1,disk-1))*(H-2*P)]);
+  const line=xy.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+  const dots=pts.length<=60?xy.map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.5" fill="var(--accent)"/>').join(""):"";
+  return '<svg viewBox="0 0 '+W+' '+H+'"><polyline points="'+line+'" fill="none" stroke="var(--accent)" stroke-width="1.5"/>'+dots+'</svg>';
+}
+function run(){
+  $("err").textContent="";
+  try{
+    const disk=Number($("disk").value), head=Number($("head").value), dir=$("dir").value, req=parseReqs($("reqs").value);
+    validate(disk,head,req,dir);
+    const rows=ALGOS.map(a=>{ const r=a.fn(req,head,disk,dir); const t=totalMovement(r.order,head); return {name:a.name,total:t,avg:t/req.length,order:r.order,virt:r.virt}; });
+    const sorted=rows.slice();
+    for(let i=1;i<sorted.length;i++){ const k=sorted[i]; let j=i-1; while(j>=0&&sorted[j].total>k.total){sorted[j+1]=sorted[j];j--;} sorted[j+1]=k; }
+    const best=sorted[0].total;
+    $("tb").innerHTML=sorted.map(r=>{
+      const ord=r.order.length<=25?r.order.map(v=>v+(r.virt.includes(v)?"*":"")).join(" "):"(" +r.order.length+" steps)";
+      return '<tr class="'+(r.total===best?"best":"")+'"><td><b>'+r.name+'</b></td><td>'+r.total+'</td><td>'+r.avg.toFixed(2)+'</td><td class="ord">'+ord+'</td></tr>';
+    }).join("");
+    const mx=Math.max(...rows.map(r=>r.total),1);
+    $("bars").innerHTML=sorted.map(r=>'<div class="bar"><b>'+r.name+'</b><i style="width:'+Math.max(1,(r.total/mx)*60)+'%"></i><span>'+r.total+'</span></div>').join("");
+    $("paths").innerHTML=rows.map(r=>'<div><h3>'+r.name+' ('+r.total+')</h3>'+pathSvg(r.order,head,disk)+'</div>').join("");
+  }catch(e){ $("err").textContent=e.message; }
+}
+$("run").onclick=run;
+$("gen").onclick=()=>{
+  try{
+    const disk=Number($("disk").value), n=Number($("cnt").value), seed=Number($("seed").value);
+    if(!Number.isInteger(disk)||disk<=0) throw new Error("Disk size must be a positive integer.");
+    if(!Number.isInteger(n)||n<1||n>10000) throw new Error("Count must be between 1 and 10000.");
+    if(!Number.isInteger(seed)||seed<0) throw new Error("Seed must be a non-negative integer.");
+    $("reqs").value=generate($("wl").value,n,disk,seed).join(" "); run();
+  }catch(e){ $("err").textContent=e.message; }
+};
+run();
+</script>
+</body>
+</html>
