@@ -1,0 +1,5 @@
+__pycache__/
+disk_scheduler
+*.csv
+*.png
+.DS_Store
