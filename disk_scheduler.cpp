@@ -10,6 +10,7 @@
 #include <cstdlib>
 
 using namespace std;
+// Member 1 (Sakshi)
 struct Node {
     int value;
     Node* next;
@@ -129,7 +130,7 @@ void validate(int diskSize, int head, const vector<int>& requests, const string&
     }
 }
 
-
+// Memeber 5
 struct Result {
     LinkedList order;     
     vector<int> virt;    
@@ -148,7 +149,7 @@ long long totalMovement(const LinkedList& order, int head) {
     return total;
 }
 
-
+// Member 2 (Navita)
 Result fcfs(const vector<int>& req, int head, int diskSize, const string& dir) {
     validate(diskSize, head, req, dir);
     Result r;
@@ -182,7 +183,7 @@ Result sstf(const vector<int>& req, int head, int diskSize, const string& dir) {
     return r;
 }
 
-
+//Member 3
 static void _split(const vector<int>& sorted, int head, const string& dir,
                    vector<int>& lower, vector<int>& upper) {
     for (size_t i = 0; i < sorted.size(); i++) {
@@ -263,7 +264,7 @@ Result look(const vector<int>& req, int head, int diskSize, const string& dir) {
     return r;
 }
 
-
+//Member 5 (Kashish)
 struct AlgoInfo { const char* name; Algo fn; };
 static const AlgoInfo ALGOS[5] = {
     {"FCFS", fcfs}, {"SSTF", sstf}, {"SCAN", scan}, {"C-SCAN", cscan}, {"LOOK", look}
@@ -337,7 +338,7 @@ vector<Row> compare(const vector<int>& req, int head, int diskSize, const string
     return rows;   
 }
 
-
+// Member 4 (vishruti)
 struct Rng {
     uint64_t s;
     explicit Rng(uint64_t seed) : s(seed * 2654435761ULL + 88172645463325252ULL) {}
