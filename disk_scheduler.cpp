@@ -1,29 +1,4 @@
-// ============================================================================
-// Disk Request Scheduling & Head Movement Simulator   (C++17)
-// Data Structures Lab - Technical Mini Project 07
-//
-// Build : g++ -std=c++17 -O2 -o disk_scheduler disk_scheduler.cpp
-// Run   : ./disk_scheduler demo               textbook example, all 5 algorithms
-//         ./disk_scheduler test               full test suite (normal/boundary/failure)
-//         ./disk_scheduler experiment         experiments (sizes 10, 100, 1000)
-//         ./disk_scheduler experiment --big   also size 10000 (SSTF is O(n^2), slow)
-//         ./disk_scheduler run                type your own input
-//
-// CONVENTIONS (write these in the report)
-//  1. Tracks are 0 .. disk_size-1.
-//  2. Total head movement = sum of |next - current| starting from the head.
-//  3. SCAN travels to the physical end of the disk before reversing.
-//  4. C-SCAN counts the return jump as movement. If there is nothing left to
-//     serve on the far side, the jump is not made.
-//  5. LOOK goes only as far as the last request in each direction.
-//  6. Average seek = total movement / number of REAL requests (virtual end
-//     stops such as 0 or disk_size-1 are not counted in the denominator).
-//  7. SSTF tie-break: if two requests are at equal distance, the LOWER track wins.
-//  8. A request equal to the head is served at zero cost, first in the sweep.
-//
-// Only our own LinkedList and merge sort are used as core structures.
-// (std::vector is used as the plain "array"; no std::sort / deque / heap.)
-// ============================================================================
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -35,18 +10,12 @@
 #include <cstdlib>
 
 using namespace std;
-
-// ============================================================================
-// SECTION 1 (Member 1): Linked list, merge sort, validation
-// ============================================================================
 struct Node {
     int value;
     Node* next;
     explicit Node(int v) : value(v), next(nullptr) {}
 };
 
-// Singly linked list with a tail pointer.
-//   append O(1) | removeNode(prev,node) O(1) | traversal O(n) | size O(1)
 class LinkedList {
     Node* head_;
     Node* tail_;
@@ -73,12 +42,11 @@ public:
 
     void append(int v) {
         Node* n = new Node(v);
-        if (head_ == nullptr) head_ = tail_ = n;   // empty list
-        else { tail_->next = n; tail_ = n; }       // link after tail, move tail
+        if (head_ == nullptr) head_ = tail_ = n;  
+        else { tail_->next = n; tail_ = n; }      
         size_++;
     }
 
-    // Removes (and deletes) `node`. `prev` is its predecessor, or nullptr if node is the head.
     void removeNode(Node* prev, Node* node) {
         if (node == nullptr) throw logic_error("removeNode: node is null");
         if (prev == nullptr) {
@@ -111,13 +79,13 @@ public:
     }
 };
 
-// Merge sort: stable, O(n log n) time, O(n) extra space. Returns a new sorted vector.
+
 static vector<int> mergeTwo(const vector<int>& a, const vector<int>& b) {
     vector<int> r;
     r.reserve(a.size() + b.size());
     size_t i = 0, j = 0;
     while (i < a.size() && j < b.size()) {
-        if (a[i] <= b[j]) r.push_back(a[i++]);   // <= keeps equal values in original order (stable)
+        if (a[i] <= b[j]) r.push_back(a[i++]);   
         else r.push_back(b[j++]);
     }
     while (i < a.size()) r.push_back(a[i++]);
@@ -133,7 +101,7 @@ vector<int> mergeSort(const vector<int>& v) {
     return mergeTwo(mergeSort(left), mergeSort(right));
 }
 
-// Parse a token into an int; rejects "3.5", "abc", "", overflow, etc.
+
 int parseInt(const string& s) {
     if (s.empty()) throw invalid_argument("empty value is not an integer");
     size_t i = 0;
@@ -145,7 +113,7 @@ int parseInt(const string& s) {
     return atoi(s.c_str());
 }
 
-// Throws invalid_argument with a clear message for any invalid input.
+
 void validate(int diskSize, int head, const vector<int>& requests, const string& direction) {
     if (diskSize <= 0) throw invalid_argument("disk size must be positive");
     if (direction != "left" && direction != "right")
@@ -161,17 +129,15 @@ void validate(int diskSize, int head, const vector<int>& requests, const string&
     }
 }
 
-// ============================================================================
-// Result type and shared metric (Member 5)
-// ============================================================================
+
 struct Result {
-    LinkedList order;     // full service sequence (starting AFTER the head position)
-    vector<int> virt;     // virtual stops (e.g. 199 or 0) the head visits but nobody requested
+    LinkedList order;     
+    vector<int> virt;    
 };
 
 typedef Result (*Algo)(const vector<int>&, int, int, const string&);
 
-// One shared function used by every algorithm to measure movement.
+
 long long totalMovement(const LinkedList& order, int head) {
     long long total = 0;
     int cur = head;
@@ -182,10 +148,7 @@ long long totalMovement(const LinkedList& order, int head) {
     return total;
 }
 
-// ============================================================================
-// SECTION 2 (Member 2): FCFS and SSTF
-// ============================================================================
-// FCFS: serve in arrival order (a FIFO queue idea). O(n) time, O(n) space.
+
 Result fcfs(const vector<int>& req, int head, int diskSize, const string& dir) {
     validate(diskSize, head, req, dir);
     Result r;
@@ -193,8 +156,6 @@ Result fcfs(const vector<int>& req, int head, int diskSize, const string& dir) {
     return r;
 }
 
-// SSTF: repeatedly pick the pending request nearest to the head.
-// O(n^2) time (n searches of an O(n) list), O(n) space. Can starve far requests.
 Result sstf(const vector<int>& req, int head, int diskSize, const string& dir) {
     validate(diskSize, head, req, dir);
     Result r;
@@ -209,7 +170,7 @@ Result sstf(const vector<int>& req, int head, int diskSize, const string& dir) {
         Node* prev = nullptr;
         for (Node* p = pending.head(); p != nullptr; prev = p, p = p->next) {
             int d = abs(p->value - cur);
-            // strictly closer wins; on a tie the LOWER track wins
+           
             if (best == nullptr || d < bestDist || (d == bestDist && p->value < best->value)) {
                 best = p; bestPrev = prev; bestDist = d;
             }
@@ -221,13 +182,7 @@ Result sstf(const vector<int>& req, int head, int diskSize, const string& dir) {
     return r;
 }
 
-// ============================================================================
-// SECTION 3 (Member 3): SCAN, C-SCAN, LOOK
-// ============================================================================
-// Split a sorted array around the head. Both outputs stay ascending.
-//   direction right: lower = tracks <  head, upper = tracks >= head
-//   direction left : lower = tracks <= head, upper = tracks >  head
-// (a request equal to the head is served first, at zero cost, in either direction)
+
 static void _split(const vector<int>& sorted, int head, const string& dir,
                    vector<int>& lower, vector<int>& upper) {
     for (size_t i = 0; i < sorted.size(); i++) {
@@ -249,7 +204,7 @@ static void addVirtual(Result& r, int track) {
     r.virt.push_back(track);
 }
 
-// SCAN (elevator): sweep to the PHYSICAL end, reverse, sweep back.
+
 Result scan(const vector<int>& req, int head, int diskSize, const string& dir) {
     validate(diskSize, head, req, dir);
     vector<int> sorted = mergeSort(req), lower, upper;
@@ -259,18 +214,18 @@ Result scan(const vector<int>& req, int head, int diskSize, const string& dir) {
     if (dir == "right") {
         addAsc(r, upper);
         int pos = upper.empty() ? head : upper.back();
-        if (pos != end) addVirtual(r, end);          // travel to the physical end
+        if (pos != end) addVirtual(r, end);         
         addDesc(r, lower);
     } else {
         addDesc(r, lower);
         int pos = lower.empty() ? head : lower[0];
-        if (pos != 0) addVirtual(r, 0);              // travel to track 0
+        if (pos != 0) addVirtual(r, 0);              
         addAsc(r, upper);
     }
     return r;
 }
 
-// C-SCAN: sweep to the end, JUMP to the other end (counted), sweep the same way again.
+
 Result cscan(const vector<int>& req, int head, int diskSize, const string& dir) {
     validate(diskSize, head, req, dir);
     vector<int> sorted = mergeSort(req), lower, upper;
@@ -281,9 +236,9 @@ Result cscan(const vector<int>& req, int head, int diskSize, const string& dir) 
         addAsc(r, upper);
         int pos = upper.empty() ? head : upper.back();
         if (pos != end) addVirtual(r, end);
-        if (!lower.empty()) {                        // jump only if something is left to serve
-            if (lower[0] != 0) addVirtual(r, 0);     // landing on 0 (jump counted as movement)
-            addAsc(r, lower);                        // lower part ASCENDING (not descending)
+        if (!lower.empty()) {                        
+            if (lower[0] != 0) addVirtual(r, 0);     
+            addAsc(r, lower);                       
         }
     } else {
         addDesc(r, lower);
@@ -291,13 +246,13 @@ Result cscan(const vector<int>& req, int head, int diskSize, const string& dir) 
         if (pos != 0) addVirtual(r, 0);
         if (!upper.empty()) {
             if (upper.back() != end) addVirtual(r, end);
-            addDesc(r, upper);                       // upper part DESCENDING
+            addDesc(r, upper);                       
         }
     }
     return r;
 }
 
-// LOOK: like SCAN, but turns around at the last request, not at the disk end.
+
 Result look(const vector<int>& req, int head, int diskSize, const string& dir) {
     validate(diskSize, head, req, dir);
     vector<int> sorted = mergeSort(req), lower, upper;
@@ -308,9 +263,7 @@ Result look(const vector<int>& req, int head, int diskSize, const string& dir) {
     return r;
 }
 
-// ============================================================================
-// SECTION 4 (Member 5): run_algorithm, compare, path export
-// ============================================================================
+
 struct AlgoInfo { const char* name; Algo fn; };
 static const AlgoInfo ALGOS[5] = {
     {"FCFS", fcfs}, {"SSTF", sstf}, {"SCAN", scan}, {"C-SCAN", cscan}, {"LOOK", look}
@@ -350,13 +303,13 @@ static bool isVirtual(const Row& r, int track) {
     return false;
 }
 
-// Runs all five on the IDENTICAL input and prints a table sorted by total movement.
+
 vector<Row> compare(const vector<int>& req, int head, int diskSize, const string& dir,
                     bool showOrder) {
     vector<Row> rows;
     for (int i = 0; i < 5; i++) rows.push_back(runAlgorithm(ALGOS[i], req, head, diskSize, dir));
 
-    // insertion sort by total movement (our own, no std::sort)
+
     vector<Row> sorted = rows;
     for (size_t i = 1; i < sorted.size(); i++) {
         Row key = sorted[i];
@@ -381,13 +334,10 @@ vector<Row> compare(const vector<int>& req, int head, int diskSize, const string
         }
         cout << "\n";
     }
-    return rows;   // original algorithm order
+    return rows;   
 }
 
-// ============================================================================
-// SECTION 5 (Member 4): workload generator, tests, experiments
-// ============================================================================
-// Own small PRNG (xorshift64*) so results are identical on every machine for a given seed.
+
 struct Rng {
     uint64_t s;
     explicit Rng(uint64_t seed) : s(seed * 2654435761ULL + 88172645463325252ULL) {}
@@ -400,24 +350,24 @@ struct Rng {
 
 static int clampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-// types: "random", "clustered", "sequential", "skewed"
+
 vector<int> generateWorkload(const string& type, int n, int diskSize, uint64_t seed) {
     Rng rng(seed);
     vector<int> out;
     if (type == "random") {
         for (int i = 0; i < n; i++) out.push_back(rng.range(0, diskSize - 1));
-    } else if (type == "clustered") {                 // around one hotspot
+    } else if (type == "clustered") {                 
         int center = rng.range(0, diskSize - 1);
         int spread = diskSize / 20 > 1 ? diskSize / 20 : 1;
         for (int i = 0; i < n; i++)
             out.push_back(clampInt(center + rng.range(-spread, spread), 0, diskSize - 1));
-    } else if (type == "sequential") {                // small increasing steps, wrapping
+    } else if (type == "sequential") {                
         int cur = rng.range(0, diskSize - 1);
         for (int i = 0; i < n; i++) {
             out.push_back(cur);
             cur = (cur + rng.range(1, 5)) % diskSize;
         }
-    } else if (type == "skewed") {                    // 80% of requests in 20% of the disk
+    } else if (type == "skewed") {                    
         int hot = diskSize / 5 > 1 ? diskSize / 5 : 1;
         for (int i = 0; i < n; i++) {
             if (hot >= diskSize || rng.range(0, 99) < 80) out.push_back(rng.range(0, hot - 1));
@@ -429,16 +379,16 @@ vector<int> generateWorkload(const string& type, int n, int diskSize, uint64_t s
     return out;
 }
 
-// ---- test suite ----
+
 struct TestCase {
     string id, category, desc;
     int disk, head;
     vector<int> req;
     string dir;
-    long long expected[5];   // FCFS, SSTF, SCAN, C-SCAN, LOOK
+    long long expected[5];   
 };
 
-// Each request must appear exactly once in the real part of the order.
+
 static bool servesAll(const Row& row, const vector<int>& req) {
     if (row.order.size() != req.size() + row.virt.size()) return false;
     vector<int> a = mergeSort(req), b;
@@ -495,7 +445,7 @@ int runTests() {
              << setw(26) << exp.str() << setw(26) << act.str() << (ok ? "PASS" : "FAIL") << "\n";
     }
 
-    // Failure tests: each must raise an error
+  
     struct FailTest { string id, desc; bool (*check)(); };
     vector<int> okReq = {10, 20};
     FailTest fails[] = {
@@ -517,17 +467,17 @@ int runTests() {
              << (ok ? "PASS" : "FAIL") << "\n";
     }
 
-    // Data-structure unit tests
+   
     bool u1, u2, u3, u4;
     {
         LinkedList ll;
         ll.append(1); ll.append(2); ll.append(3);
         u1 = (ll.toVector() == vector<int>{1, 2, 3} && ll.tail()->value == 3 && ll.size() == 3);
-        ll.removeNode(ll.head()->next, ll.tail());            // remove tail
+        ll.removeNode(ll.head()->next, ll.tail());            
         u2 = (ll.toVector() == vector<int>{1, 2} && ll.tail()->value == 2);
-        ll.removeNode(nullptr, ll.head());                    // remove head
-        ll.removeNode(nullptr, ll.head());                    // remove last node -> empty
-        ll.append(9);                                         // still works after emptying
+        ll.removeNode(nullptr, ll.head());                    
+        ll.removeNode(nullptr, ll.head());                    
+        ll.append(9);                                         
         u2 = u2 && ll.toVector() == vector<int>{9} && ll.size() == 1;
     }
     u3 = (mergeSort({5, 3, 5, 1, 0, 9}) == vector<int>{0, 1, 3, 5, 5, 9}) &&
@@ -553,7 +503,7 @@ int runTests() {
     return failed == 0 ? 0 : 1;
 }
 
-// ---- experiments ----
+
 void runExperiments(bool big) {
     const int DISK = 5000;
     const int HEAD = DISK / 2;
@@ -594,9 +544,7 @@ void runExperiments(bool big) {
     cout << "Saved results.csv (use plot.py for the charts).\n";
 }
 
-// ============================================================================
-// Demo and interactive run
-// ============================================================================
+
 void demo() {
     vector<int> book = {98, 183, 37, 122, 14, 124, 65, 67};
     vector<Row> rows = compare(book, 53, 200, "right", true);

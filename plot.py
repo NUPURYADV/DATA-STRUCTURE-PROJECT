@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 ALGOS = ["FCFS", "SSTF", "SCAN", "C-SCAN", "LOOK"]
 
-# ---- head-movement graphs (step on x, track on y) ----
+
 if all(os.path.exists(f"path_{a}.csv") for a in ALGOS):
     fig, axes = plt.subplots(len(ALGOS), 1, figsize=(7, 3 * len(ALGOS)), sharex=False)
     for ax, a in zip(axes, ALGOS):
@@ -29,9 +29,9 @@ if all(os.path.exists(f"path_{a}.csv") for a in ALGOS):
     fig.savefig("head_paths.png", dpi=120)
     print("saved head_paths.png")
 
-# ---- comparison charts ----
+
 if os.path.exists("results.csv"):
-    data = {}   # data[workload][size][algo] = total movement
+    data = {}   
     with open("results.csv") as f:
         for row in csv.DictReader(f):
             w, n, a = row["workload"], int(row["size"]), row["algorithm"]
@@ -40,7 +40,7 @@ if os.path.exists("results.csv"):
     for w, by_size in data.items():
         sizes = sorted(by_size)
 
-        # bar chart: total movement per algorithm, grouped by size (log scale: FCFS is huge)
+       
         fig, ax = plt.subplots(figsize=(8, 4))
         width = 0.15
         for i, a in enumerate(ALGOS):
@@ -57,7 +57,7 @@ if os.path.exists("results.csv"):
         fig.savefig(f"bar_{w}.png", dpi=120)
         plt.close(fig)
 
-        # line chart: total movement against request count
+     
         fig, ax = plt.subplots(figsize=(8, 4))
         for a in ALGOS:
             ax.plot(sizes, [by_size[n][a] for n in sizes], marker="o", label=a)

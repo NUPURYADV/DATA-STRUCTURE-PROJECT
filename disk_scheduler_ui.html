@@ -73,7 +73,7 @@ tr.best td{background:var(--best)}
 </main>
 
 <script>
-// ---------- own data structures ----------
+
 class LinkedList {
   constructor(){ this.head=null; this.tail=null; this.size=0; }
   append(v){ const n={value:v,next:null}; if(!this.head){this.head=this.tail=n;} else {this.tail.next=n; this.tail=n;} this.size++; }
@@ -102,7 +102,7 @@ function validate(disk,head,reqs,dir){
 }
 function totalMovement(order,head){ let t=0,c=head; for(const v of order){ t+=Math.abs(v-c); c=v; } return t; }
 
-// ---------- algorithms: each returns {order, virt} ----------
+
 function split(sorted,head,dir){
   const lower=[],upper=[];
   for(const v of sorted){ const isLow = dir==="right" ? v<head : v<=head; (isLow?lower:upper).push(v); }
@@ -162,7 +162,7 @@ function generate(type,n,disk,seed){
   return out;
 }
 
-// ---------- UI ----------
+
 const $=id=>document.getElementById(id);
 function parseReqs(text){
   const toks=text.split(/[\s,]+/).filter(Boolean);
